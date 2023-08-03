@@ -1,0 +1,15 @@
+name: asoarcos
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - xlrd
+  - notebook
+  - pandas
+  - nltk
+  - openpyxl
+  - fuzzywuzzy
+  - plotly
+  - pyinstaller
+  - unidecode
+prefix: /Users/oscar/anaconda3/envs/asoarcos
