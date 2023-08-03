@@ -1,1 +1,4 @@
-Exporting the environment `conda env export --from-history > conda_env.yml`
+Exporting the environment:
+==========================
+
+Run command: `conda env export --from-history > conda_env.yml`
