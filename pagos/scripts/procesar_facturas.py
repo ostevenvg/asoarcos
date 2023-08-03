@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 from utilities import *
 
 
-# In[ ]:
+# In[2]:
 
 
 ############### Functions to get and generated paid months ################
@@ -137,7 +137,7 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[ ]:
+# In[3]:
 
 
 ########### MAIN ############
@@ -155,7 +155,7 @@ print("Procesando facturas de Quickbooks")
 [df_bills_allrows, df_bills] = process_bill_excel(inputs_dir)
 
 
-# In[ ]:
+# In[12]:
 
 
 print("Generando facturas nuevas")
@@ -167,7 +167,7 @@ if os.path.exists(outputs_dir + "/bancos.xlsx"):
     df_clientes = pd.read_excel(outputs_dir + "/bancos.xlsx", sheet_name='clientes')
     #validate if clientes row is correct
     df_bad_clientes = df_bancos[df_bancos['cliente'].isin(df_clientes['Customer']) == False]
-    if not df_bad_clientes.empty:
+    if  df_bad_clientes.empty:
         print("ERROR: los siguientes clientes no son validos, revise si se escribieron incorrectamente o sin son validos pero son mas de uno separelos en varias filas en el excel bancos.xlsx (un cliente por fila)")
         for client in list(df_bad_clientes['cliente']):
             print(' - {}'.format(client))
@@ -178,25 +178,29 @@ if os.path.exists(outputs_dir + "/bancos.xlsx"):
         df_bancos_valid = df_bancos_valid.merge(df_bills, on=['cliente'])
         df_bancos_valid['siguiente descripcion'] = df_bancos_valid.apply(lambda x: gen_next_description(x['ultimo mes'],x['num meses']), axis=1)
         df_bancos_valid.rename(columns={"descripcion": "detalle banco"}, inplace=True)
-        df_bancos_excel_colums = ['banco', 'referencia', 'detalle banco' ,'fecha', 'cliente', 'credito', 'siguiente descripcion']
+          
+        #quickbooks format
+        #df_bancos_excel_colums = ['banco', 'referencia', 'detalle banco' ,'fecha', 'cliente', 'credito', 'siguiente descripcion']
+        
+        df_bancos_qb = df_bancos_valid.rename(columns={'cliente':'Customer', 'detalle banco':'ItemDescription', 'credito':'ItemAmount'})
+        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+1000)
+        date = dt.datetime.today().strftime("%m/%d/%Y")
+        df_bancos_qb.insert(1,'InvoiceDate',date)
+        df_bancos_qb.insert(2,'DueDate',date)
+        csv_columns = ['InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'ItemDescription', 'ItemAmount']
+        df_bancos_qb[csv_columns].to_csv("{}/qb_import.csv".format(outputs_dir),index=False)
         add_for_quickbooks = True
     
 #Save excel
 with pd.ExcelWriter("{}/facturas.xlsx".format(outputs_dir)) as writer:
     if add_for_quickbooks:
-        df_bancos_valid[df_bancos_excel_colums].to_excel(writer, index=False, sheet_name='para_quickbooks')
+        df_bancos_valid.to_excel(writer, index=False, sheet_name='para_quickbooks')
     df_bills.to_excel(writer, index=False, sheet_name='historico')
         
 print("Excel file generado: {}/facturas.xlsx".format(outputs_dir))
 
 
-# In[ ]:
-
-
-df_bancos[df_bancos['cliente'].isin(df_clientes['Customer']) == False]
-
-
-# In[ ]:
+# In[13]:
 
 
 print("Generando reporte web")
@@ -225,4 +229,10 @@ with open("{}/reporte.html".format(outputs_dir), "w") as fh:
         fh.write(fig.to_html())
 print("Reporte web generado: {}/reporte.html".format(outputs_dir))
 print("Fin del proceso.")
+
+
+# In[ ]:
+
+
+
 

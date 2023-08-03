@@ -193,7 +193,7 @@ def process_bank_excel(inputs_dir,bank,bank_config):
 ########### MAIN ############
 
 #Work directories
-work_dir=os.getcwd()
+work_dir="/Users/oscar/Documents/work"
 inputs_dir=work_dir+"/inputs"
 if not os.path.exists(inputs_dir):
     print("Error: El directorio con los archivos de entrada no existe: " + inputs_dir)
