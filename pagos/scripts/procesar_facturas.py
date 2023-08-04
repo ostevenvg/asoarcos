@@ -141,12 +141,17 @@ def process_bill_excel(inputs_dir):
 
 
 ########### MAIN ############
-work_dir=os.getcwd()
-inputs_dir=work_dir+"/inputs"
+
+if len(sys.argv) != 2:
+    print("Error: Se debe indicar el directorio donde estan las entradas")
+    exit(1)
+    
+inputs_dir = os.path.abspath(sys.argv[1])
 if not os.path.exists(inputs_dir):
     print("Error: El directorio con los archivos de entrada no existe: " + inputs_dir)
     exit(1)
-outputs_dir=work_dir+"/outputs"
+    
+outputs_dir = os.path.dirname(inputs_dir) + "/outputs"
 if not os.path.exists(outputs_dir):
     os.makedirs(outputs_dir)
 
