@@ -235,7 +235,7 @@ fig = px.histogram(df_bills_, x = "mes_factura", y = "Amount", color="tipo de pa
 fig.update_layout(bargap=0.2)
 figs.append(fig)
 
-reporte_file = os.path.join(outputs_dir,"reporte")
+reporte_file = os.path.join(outputs_dir,"reporte.html")
 with open(reporte_file, "w") as fh:
     for fig in figs:
         fh.write(fig.to_html())
