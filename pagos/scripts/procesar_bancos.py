@@ -4,6 +4,8 @@
 # In[ ]:
 
 
+import os, sys
+sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
@@ -125,7 +127,7 @@ def check_payment(amount, m=None, recursive=True):
             return 0
         
 def process_customers_excel(inputs_dir):
-    df = gendf_from_excel_table(inputs_dir + "/clientes_quickbooks.xlsx",['Customer', 'Email'],stop_if_empty=False)
+    df = gendf_from_excel_table(os.path.join(inputs_dir, "clientes_quickbooks.xlsx"),['Customer', 'Email'],stop_if_empty=False)
     
     #split casa and name
     df['is_casa'], df['casa'], df['name'] = zip(*df['Customer'].map(get_casa_from_customer))
@@ -138,18 +140,18 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     bank_cols = {v: k for k, v in bank_config[bank].items()}
 
     #get which lines have the table we want to read with pandas
-    excel_bank = "{}/banco_{}.xlsx".format(inputs_dir,bank)
-    if not os.path.exists(excel_bank):
-         excel_bank = "{}/banco_{}.xls".format(inputs_dir,bank)
+    bank_excel = os.path.join(inputs_dir, "banco_" + bank + ".xls")
+    if not os.path.exists(bank_excel):
+         bank_excel += "x" 
     
-    if not os.path.exists(excel_bank):
-        print("INFO: File {}(x) not found. Bank {} not processed.".format(excel_bank, bank))
+    if not os.path.exists(bank_excel):
+        print("INFO: File {}(x) not found. Bank {} not processed.".format(bank_excel, bank))
         return pd.DataFrame([])
     
     #create dataframe with normalized columns
-    bankdf = gendf_from_excel_table(excel_bank,bank_cols)
+    bankdf = gendf_from_excel_table(bank_excel,bank_cols)
     if bankdf.empty:
-        print("INFO: Columns {} not found in file {}. Check configuration".format(bank_cols, excel_bank))
+        print("INFO: Columns {} not found in file {}. Check configuration".format(bank_cols, bank_excel))
         return bankdf
     
     bankdf.rename(columns=bank_cols, inplace=True)
@@ -167,7 +169,7 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     bankdf=bankdf[1:][bank_cols.values()]
     
     #add bank columns
-    bankdf.insert(0,'excel',excel_bank)
+    bankdf.insert(0,'excel',bank_excel)
     bankdf.insert(0,'banco',bank)
     bankdf['casas']=bankdf['descripcion'].apply(get_casas_from_description)
     
@@ -192,9 +194,9 @@ def process_bank_excel(inputs_dir,bank,bank_config):
 
 ########### MAIN ############
 
-#Work directories
-#work_dir=os.getcwd()
-
+#work directory
+if is_interactive():
+    sys.argv = ['', "/Users/oscar/Documents/work/qb_example/"]
 if len(sys.argv) != 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
@@ -203,8 +205,8 @@ inputs_dir = os.path.abspath(sys.argv[1])
 if not os.path.exists(inputs_dir):
     print("Error: El directorio con los archivos de entrada no existe: " + inputs_dir)
     exit(1)
-    
-outputs_dir = os.path.dirname(inputs_dir) + "/outputs"
+
+outputs_dir = os.path.join(inputs_dir, "salidas")
 if not os.path.exists(outputs_dir):
     os.makedirs(outputs_dir)
     
@@ -214,11 +216,13 @@ dict_customers = df_customers[df_customers['is_casa']][['Customer', 'name']].dro
 casa_customers = list(df_customers[df_customers['is_casa']]['Customer'])
 
 #Load configuration
-if os.path.exists(inputs_dir + "/config.xlsx"):
-    config_excel = inputs_dir + "/config.xlsx"
+config_path = os.path.join(inputs_dir, "config.xlsx")
+if os.path.exists(config_path):
+    config_excel = config_path
 else:
     config_excel = "config.xlsx"
-print("Leyendo configuration desde: " + config_excel)
+    
+print("Leyendo la configuracion desde: " + config_excel)
 df_main_config = pd.read_excel(config_excel, sheet_name="principal").dropna(axis=1, how="all")
 main_config = df_main_config.set_index("item").to_dict()['valor']
 df_bank_config = pd.read_excel(config_excel, sheet_name="columnas bancos").dropna(axis=1, how="all")
@@ -231,13 +235,18 @@ for bank in bank_config:
     bank_df = process_bank_excel(inputs_dir, bank, bank_config)
     if not bank_df.empty:
         bank_dfs.append(bank_df)
-df = pd.concat(bank_dfs).reset_index(drop=True)
 
-#Save excel
-with pd.ExcelWriter("{}/bancos.xlsx".format(outputs_dir)) as writer:
-    df.to_excel(writer, index=False, sheet_name='bancos')
-    df_customers.to_excel(writer, index=False, sheet_name='clientes')
+if bank_dfs:
+    df = pd.concat(bank_dfs).reset_index(drop=True)
 
-print("Excel file creado: {}/bancos.xlsx".format(outputs_dir))
+    #Save excel
+    bank_excel = os.path.join(outputs_dir, "bancos.xlsx")
+    with pd.ExcelWriter(bank_excel) as writer:
+        df.to_excel(writer, index=False, sheet_name='bancos')
+        df_customers.to_excel(writer, index=False, sheet_name='clientes')
+    print("Excel creado: {}".format(bank_excel))
+else:
+    print("Error: no fue encontrado el excel de ningun banco. Nada creado.")
+
 print("Fin del proceso.")
 

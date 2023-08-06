@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
+import os, sys
+sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[2]:
+# In[ ]:
 
 
 ############### Functions to get and generated paid months ################
@@ -113,7 +115,7 @@ def get_description_months(description):
 
 
 def process_bill_excel(inputs_dir):
-    df = gendf_from_excel_table(inputs_dir + "/facturas_quickbooks.xlsx",['Memo/Description'])
+    df = gendf_from_excel_table(os.path.join(inputs_dir, "facturas_quickbooks.xlsx"),['Memo/Description'])
     df = df[1:][['Date','Num', 'Name', 'Memo/Description','Amount']].dropna(axis=0, how="all")
     
     #get mes
@@ -137,11 +139,13 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[3]:
+# In[ ]:
 
 
 ########### MAIN ############
-
+#work directory
+if is_interactive():
+    sys.argv = ['', "/Users/oscar/Documents/work/qb_example/"]
 if len(sys.argv) != 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
@@ -150,26 +154,28 @@ inputs_dir = os.path.abspath(sys.argv[1])
 if not os.path.exists(inputs_dir):
     print("Error: El directorio con los archivos de entrada no existe: " + inputs_dir)
     exit(1)
-    
-outputs_dir = os.path.dirname(inputs_dir) + "/outputs"
+
+outputs_dir = os.path.join(inputs_dir, "salidas")
 if not os.path.exists(outputs_dir):
     os.makedirs(outputs_dir)
 
-print("Procesando facturas de Quickbooks")
 #Load bills
+print("Procesando facturas de Quickbooks")
 [df_bills_allrows, df_bills] = process_bill_excel(inputs_dir)
 
 
-# In[12]:
+# In[ ]:
 
 
 print("Generando facturas nuevas")
 #Process bancos if found, to create file that will be imported to quickbooks
 add_for_quickbooks = False
-if os.path.exists(outputs_dir + "/bancos.xlsx"):
+
+banks_file = os.path.join(outputs_dir, "bancos.xlsx")
+if os.path.exists(banks_file ):
     #get bancos and clientes
-    df_bancos = pd.read_excel(outputs_dir + "/bancos.xlsx", sheet_name='bancos')
-    df_clientes = pd.read_excel(outputs_dir + "/bancos.xlsx", sheet_name='clientes')
+    df_bancos = pd.read_excel(banks_file , sheet_name='bancos')
+    df_clientes = pd.read_excel(banks_file , sheet_name='clientes')
     #validate if clientes row is correct
     df_bad_clientes = df_bancos[df_bancos['cliente'].isin(df_clientes['Customer']) == False]
     if  df_bad_clientes.empty:
@@ -193,19 +199,20 @@ if os.path.exists(outputs_dir + "/bancos.xlsx"):
         df_bancos_qb.insert(1,'InvoiceDate',date)
         df_bancos_qb.insert(2,'DueDate',date)
         csv_columns = ['InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'ItemDescription', 'ItemAmount']
-        df_bancos_qb[csv_columns].to_csv("{}/qb_import.csv".format(outputs_dir),index=False)
+        df_bancos_qb[csv_columns].to_csv(os.path.join(outputs_dir,"qb_import.csv"),index=False)
         add_for_quickbooks = True
     
 #Save excel
-with pd.ExcelWriter("{}/facturas.xlsx".format(outputs_dir)) as writer:
+facturas_file = os.path.join(outputs_dir, "facturas.xlsx")
+with pd.ExcelWriter(facturas_file) as writer:
     if add_for_quickbooks:
         df_bancos_valid.to_excel(writer, index=False, sheet_name='para_quickbooks')
     df_bills.to_excel(writer, index=False, sheet_name='historico')
         
-print("Excel file generado: {}/facturas.xlsx".format(outputs_dir))
+print("Excel file generado: {}".format(facturas_file))
 
 
-# In[13]:
+# In[ ]:
 
 
 print("Generando reporte web")
@@ -228,16 +235,10 @@ fig = px.histogram(df_bills_, x = "mes_factura", y = "Amount", color="tipo de pa
 fig.update_layout(bargap=0.2)
 figs.append(fig)
 
-
-with open("{}/reporte.html".format(outputs_dir), "w") as fh:
+reporte_file = os.path.join(outputs_dir,"reporte")
+with open(reporte_file, "w") as fh:
     for fig in figs:
         fh.write(fig.to_html())
-print("Reporte web generado: {}/reporte.html".format(outputs_dir))
+print("Reporte web generado: {}".format(reporte_file))
 print("Fin del proceso.")
-
-
-# In[ ]:
-
-
-
 
