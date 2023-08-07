@@ -106,6 +106,7 @@ def fix_credit_column(c):
             return np.nan
     return out 
 
+#return num of mensualidades y si incluye patos
 def check_payment(amount, m=None, recursive=True):
     if not m:
         m = main_config['mensualidad']
@@ -115,16 +116,16 @@ def check_payment(amount, m=None, recursive=True):
     
     if q > 0 and r == 0 :
         #mensualidad exacta
-        return q
+        return [q, 0]
     elif q > 0 and r == q * main_config['agua lago']:
         #mensualidad con agua lagos exacta
-        return q
+        return [q, 1]
     else:
         #probar mensualidad anterior
         if recursive:
             return check_payment(amount, m=main_config['mensualidad anterior'], recursive=False)
         else:
-            return 0
+            return [0, 0]
         
 def process_customers_excel(inputs_dir):
     df = gendf_from_excel_table(os.path.join(inputs_dir, "clientes_quickbooks.xlsx"),['Customer', 'Email'],stop_if_empty=False)
@@ -184,7 +185,10 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     #Try to guess numero de casas and meses pagados
     bankdf['num casas'] = bankdf['casas'].apply(lambda x: len(x) if isinstance(x,list) else 0)
     bankdf.credito.astype('float')
-    bankdf['num meses'] = bankdf['credito'].apply(check_payment)
+    
+    #df['is_casa'], df['casa'], df['name'] = zip(*df['Customer'].map(get_casa_from_customer))
+    #bankdf['num meses'] = bankdf['credito'].apply(check_payment)
+    bankdf['num meses'], bankdf['agua patos'] = zip(*bankdf['credito'].apply(check_payment))
     
     return bankdf
 

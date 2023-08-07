@@ -4,7 +4,7 @@
 # In[ ]:
 
 
-import os, sys
+import os, sys, calendar
 sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
@@ -45,6 +45,9 @@ def gen_month_description(y, mlist):
         return "{} {}".format(MONTHS[mlist[0]],y)
     
 def gen_next_description(lastmonth, nmonths=1):
+    if not isinstance(lastmonth,list):
+        lastmonth = [dt.datetime.today().year-1,12]
+
     y = int(lastmonth[0])
     m = int(lastmonth[1])
     d = []
@@ -63,6 +66,24 @@ def gen_next_description(lastmonth, nmonths=1):
     
     return "MES AL COBRO " + ' Y '.join(d)
 
+def normalize_fecha(in_date):
+    m = re.match(r'(\d*)/(\d*)(/(\d*))?',in_date)
+    if m:
+        day = m.group(1)
+        month = m.group(2)
+        if m.group(4):
+            year = m.group(4)
+            if len(year) == 2:
+                year = str(dt.datetime.today().year)[:2] + year
+        else:
+            year = str(dt.datetime.today().year)
+            
+        norm_date = '{}/{}/{}'.format(day,month,year)
+        due_date = '{}/{}/{}'.format(calendar.monthrange(int(year), int(month))[1],month,year)
+        return [norm_date, due_date]
+    else:
+        return [None, None]
+        
 def get_description_months(description): 
     out = list()
     d = description.upper()
@@ -167,41 +188,43 @@ print("Procesando facturas de Quickbooks")
 # In[ ]:
 
 
-print("Generando facturas nuevas")
 #Process bancos if found, to create file that will be imported to quickbooks
 add_for_quickbooks = False
 
 banks_file = os.path.join(outputs_dir, "bancos.xlsx")
 if os.path.exists(banks_file ):
+    print("Generando facturas nuevas")
     #get bancos and clientes
     df_bancos = pd.read_excel(banks_file , sheet_name='bancos')
     df_clientes = pd.read_excel(banks_file , sheet_name='clientes')
     #validate if clientes row is correct
     df_bad_clientes = df_bancos[df_bancos['cliente'].isin(df_clientes['Customer']) == False]
-    if  df_bad_clientes.empty:
+    if df_bad_clientes.empty:
         print("ERROR: los siguientes clientes no son validos, revise si se escribieron incorrectamente o sin son validos pero son mas de uno separelos en varias filas en el excel bancos.xlsx (un cliente por fila)")
         for client in list(df_bad_clientes['cliente']):
             print(' - {}'.format(client))
     else:
-        #generate table to be imported in quickbooks
         df_bancos_valid =  df_bancos.loc[(df_bancos['cliente'].notna()) & (df_bancos['num casas'].notna()) & (df_bancos['num meses'].notna()) &
                   (df_bancos['num casas'] != 0) & (df_bancos['num meses'] != 0)]
-        df_bancos_valid = df_bancos_valid.merge(df_bills, on=['cliente'])
+        df_bancos_valid = df_bancos_valid.merge(df_bills, how='left', on=['cliente'])
         df_bancos_valid['siguiente descripcion'] = df_bancos_valid.apply(lambda x: gen_next_description(x['ultimo mes'],x['num meses']), axis=1)
         df_bancos_valid.rename(columns={"descripcion": "detalle banco"}, inplace=True)
           
         #quickbooks format
-        #df_bancos_excel_colums = ['banco', 'referencia', 'detalle banco' ,'fecha', 'cliente', 'credito', 'siguiente descripcion']
-        
-        df_bancos_qb = df_bancos_valid.rename(columns={'cliente':'Customer', 'detalle banco':'ItemDescription', 'credito':'ItemAmount'})
+        df_bancos_qb = df_bancos_valid.rename(columns={'cliente':'Customer', 
+                                                       'siguiente descripcion':'ItemDescription', 
+                                                       'credito':'ItemAmount'})
+                                                       
         df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+1000)
-        date = dt.datetime.today().strftime("%m/%d/%Y")
-        df_bancos_qb.insert(1,'InvoiceDate',date)
-        df_bancos_qb.insert(2,'DueDate',date)
-        csv_columns = ['InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'ItemDescription', 'ItemAmount']
-        df_bancos_qb[csv_columns].to_csv(os.path.join(outputs_dir,"qb_import.csv"),index=False)
+        df_bancos_qb['InvoiceDate'], df_bancos_qb['DueDate'] = zip(*df_bancos_qb['fecha'].map(normalize_fecha))
+        df_bancos_qb['Item(Product/Service)'] = "Aporte Comunal (Seguridad, Limpieza y Mantenimiento)"
+        
+        csv_columns = ['InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'Item(Product/Service)', 'ItemDescription', 'ItemAmount']
+        qb_csv = os.path.join(outputs_dir,"qb_import.csv")
+        df_bancos_qb[csv_columns].to_csv(qb_csv,index=False)
+        print("CSV generado (archivo que se importa en Quickbooks): {}".format(qb_csv))
         add_for_quickbooks = True
-    
+
 #Save excel
 facturas_file = os.path.join(outputs_dir, "facturas.xlsx")
 with pd.ExcelWriter(facturas_file) as writer:
@@ -209,7 +232,7 @@ with pd.ExcelWriter(facturas_file) as writer:
         df_bancos_valid.to_excel(writer, index=False, sheet_name='para_quickbooks')
     df_bills.to_excel(writer, index=False, sheet_name='historico')
         
-print("Excel file generado: {}".format(facturas_file))
+print("Excel generado: {}".format(facturas_file))
 
 
 # In[ ]:
