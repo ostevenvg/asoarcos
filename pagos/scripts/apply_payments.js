@@ -16,7 +16,7 @@ function find_btn(tag, text, bclass) {
 
 const apply_all_payments = async () => {
 	let i = 0
-	while ( i<5 ) {
+	while ( i<300 ) {
 		i = i + 1
 		console.log("Iteración " + i);
 
@@ -29,10 +29,15 @@ const apply_all_payments = async () => {
 		console.log("Esperando 10 segundos antes de ejecutar Save and close");
     		await delay(10000);
 			
-		save_btn = find_btn('button', 'Save and close', 'combo-button-main')
+		save_btn = find_btn('button', 'Save and send', 'combo-button-main')
+		save_btn.click()
+		console.log("Esperando 5 segundos antes de buscar otro pago");
+	    	await delay(5000);
+			
+		save_btn = find_btn('button', 'Send and close', 'combo-button-main')
 		save_btn.click()
 		console.log("Esperando 10 segundos antes de buscar otro pago");
-	    	await delay(10000);
+		    await delay(10000);
 			
 	}
 };
