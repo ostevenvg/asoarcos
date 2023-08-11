@@ -83,7 +83,13 @@ def normalize_fecha(in_date):
         return [norm_date, due_date]
     else:
         return [None, None]
-        
+
+def month2num(x):
+    return (int(x[0])-2000)*12+int(x[1])
+    
+def num2month(x):
+    return [2000 + math.floor((x-1)/12), x-12*math.floor((x-1)/12)]
+
 def get_description_months(description): 
     out = list()
     d = description.upper()
@@ -135,6 +141,26 @@ def get_description_months(description):
     return out_
 
 
+def group_bill_df(df, from_month=''):
+    df_ = df.copy()
+    df_["mes_factura"]=df_['Date'].dt.strftime('%Y,%m').str.split(',')
+    df_["mes_factura_n"] = df_["mes_factura"].apply(month2num)
+    if from_month:
+        df_ = df_[(df_['mes_factura_n']>=month2num(from_month))]
+
+    #group by name (client), adding date,num,description as lists
+    for col in ['Date', 'Num', 'Memo/Description', 'mes_factura_n']:
+        df_[col] = df_[col].apply(lambda x: [x])
+    df_ = df_.groupby(['Name']).sum()
+    df_.insert(0, 'cliente', df_.index)
+    
+    #add extrasummary columns
+    df_['ultima factura'] = df_['Memo/Description'].apply(lambda x: x[-1] if x else np.nan)
+    df_['ultimo mes'] = df_['mes'].apply(lambda x: x[-1] if x else np.nan)
+    df_['siguiente descripcion'] = df_['ultimo mes'].apply(lambda x: gen_next_description(x,1) if isinstance(x,list) else np.nan)
+
+    return df_
+
 def process_bill_excel(inputs_dir):
     df = gendf_from_excel_table(os.path.join(inputs_dir, "facturas_quickbooks.xlsx"),['Memo/Description'])
     df = df[1:][['Date','Num', 'Name', 'Memo/Description','Amount']].dropna(axis=0, how="all")
@@ -146,17 +172,7 @@ def process_bill_excel(inputs_dir):
     df_allrows=df.copy(deep=True)
     df_allrows['Date']= pd.to_datetime(df_allrows['Date'], dayfirst=True)
     
-    #group by name (client), adding date,num,description as lists
-    for col in ['Date', 'Num', 'Memo/Description']:
-        df[col] = df[col].apply(lambda x: [x])
-    df = df.groupby(['Name']).sum()
-    df.insert(0, 'cliente', df.index)
-    
-    #add extrasummary columns
-    df['ultima factura'] = df['Memo/Description'].apply(lambda x: x[-1] if x else np.nan)
-    df['ultimo mes'] = df['mes'].apply(lambda x: x[-1] if x else np.nan)
-    df['siguiente descripcion'] = df['ultimo mes'].apply(lambda x: gen_next_description(x,1) if isinstance(x,list) else np.nan)
-    
+    df = group_bill_df(df_allrows)
     return [df_allrows, df] 
 
 
@@ -166,10 +182,14 @@ def process_bill_excel(inputs_dir):
 ########### MAIN ############
 #work directory
 if is_interactive():
-    sys.argv = ['', "/Users/oscar/Documents/work/qb_example/"]
-if len(sys.argv) != 2:
+    #sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\asoarcos\pagos\inputs_example']
+    sys.argv = ['', r"/Users/oscar/Documents/work/qb_example/"]
+if len(sys.argv) < 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
+tasks = ['gen_qb_csv', 'gen_report']
+if len(sys.argv) == 3:
+    tasks = [sys.argv[2]]
     
 inputs_dir = os.path.abspath(sys.argv[1])
 if not os.path.exists(inputs_dir):
@@ -192,8 +212,8 @@ print("Procesando facturas de Quickbooks")
 add_for_quickbooks = False
 
 banks_file = os.path.join(outputs_dir, "bancos.xlsx")
-if os.path.exists(banks_file ):
-    print("Generando facturas nuevas")
+if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
+    print("Generando archivo CSV para Quickbooks")
     #get bancos and clientes
     df_bancos = pd.read_excel(banks_file , sheet_name='bancos')
     df_clientes = pd.read_excel(banks_file , sheet_name='clientes')
@@ -214,8 +234,9 @@ if os.path.exists(banks_file ):
         df_bancos_qb = df_bancos_valid.rename(columns={'cliente':'Customer', 
                                                        'siguiente descripcion':'ItemDescription', 
                                                        'credito':'ItemAmount'})
-                                                       
-        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+1000)
+        
+        max_bill_num = max(df_bills_allrows['Num'].astype(int))
+        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+max_bill_num +1)
         df_bancos_qb['InvoiceDate'], df_bancos_qb['DueDate'] = zip(*df_bancos_qb['fecha'].map(normalize_fecha))
         df_bancos_qb['Item(Product/Service)'] = "Aporte Comunal (Seguridad, Limpieza y Mantenimiento)"
         
@@ -238,30 +259,106 @@ print("Excel generado: {}".format(facturas_file))
 # In[ ]:
 
 
-print("Generando reporte web")
-############# REPORT ###########
-figs = []
+if 'gen_report' in tasks:
+    print("Generando reporte web")
+    ############# REPORT ###########
+    figs = []
 
-#Meses cancelados
-df_bills_= df_bills.dropna(axis=0, subset="ultimo mes").explode('mes')
-df_bills_['mes'] = df_bills_['mes'].apply(lambda x: str(x[0])+'-'+str(x[1]))
-fig = px.histogram(df_bills_, x = "mes", text_auto=True, title = "Meses cancelados")
-fig.update_layout(bargap=0.2)
-figs.append(fig)
+    #asociados al dia
+    df_bills_ = df_bills_allrows.copy()
+    df_bills_ = df_bills_.explode('mes').dropna(axis=0, subset="mes")
+    df_bills_["mes_factura"]=df_bills_['Date'].dt.strftime('%Y,%m').str.split(',')
+    df_bills_["mes_factura_n"] = df_bills_["mes_factura"].apply(month2num)
+    df_bills_["mes_n"] =  df_bills_["mes"].apply(month2num)
 
-#Dinero que ingresa al mes
-df_bills_ = df_bills_allrows
-df_bills_["mes_factura"]=df_bills_['Date'].dt.strftime('%Y-%m')
-df_bills_["tipo de pago"]=df_bills_['mes'].apply(lambda x: "cuota condominal" if x else "otros")
-fig = px.histogram(df_bills_, x = "mes_factura", y = "Amount", color="tipo de pago",
-                   text_auto=True, title = "Monto recaudado")
-fig.update_layout(bargap=0.2)
-figs.append(fig)
+    paid_months = list()
+    d_map = ['mes actual', 'mes anterior', 'hace dos meses', 'hace tres meses']
+    for m in range(1,13):
+        month = ['2023', str(m)]
+        m_s = '-'.join(month)
+        m_n = month2num(month)
+        for d in [0, 1, 2, 3]:
+            c = df_bills_[(df_bills_['mes_factura_n'] <= m_n) & (df_bills_['mes_n'] == m_n-d)].shape[0]
+            paid_months.append([m_s, d_map[d], c])
 
-reporte_file = os.path.join(outputs_dir,"reporte.html")
-with open(reporte_file, "w") as fh:
-    for fig in figs:
-        fh.write(fig.to_html())
-print("Reporte web generado: {}".format(reporte_file))
+    df = pd.DataFrame(paid_months, columns = ['mes', 'al dia con respecto a', 'numero de asociados'])
+    fig = px.bar(df, x='mes', y='numero de asociados', color='al dia con respecto a', barmode="group",
+          title = "Número de asociados al día")
+    figs.append(fig)
+
+    #Dinero que ingresa al mes
+    ###############################################################
+    df_bills_2 = df_bills_allrows.copy()
+    df_bills_2["mes_factura"]=df_bills_2['Date'].dt.strftime('%Y-%m')
+    df_bills_2["tipo de pago"]=df_bills_2['mes'].apply(lambda x: "cuota condominal" if x else "otros")
+    fig = px.histogram(df_bills_2, x = "mes_factura", y = "Amount", color="tipo de pago",
+                       text_auto=True, title = "Monto recaudado")
+    fig.update_layout(bargap=0.2)
+    figs.append(fig)
+
+    #Meses cancelados
+    ###############################################################
+    df_bills_1= df_bills.dropna(axis=0, subset="ultimo mes").explode('mes')
+    df_bills_1['mes'] = df_bills_1['mes'].apply(lambda x: str(x[0])+'-'+str(x[1]))
+    fig = px.histogram(df_bills_1, x = "mes", text_auto=True, title = "Meses cancelados")
+    fig.update_layout(bargap=0.2)
+    figs.append(fig)
+
+
+    #Clientes perdidos
+    ###############################################################
+    due_alarm = [3, 2] #meses pendientes, meses pendientes diferido
+    start_month = ['2023', '1']
+    current_month = ['2023', '6']
+    month_diff = month2num(current_month) - month2num(start_month) + 1
+
+    def only_positive(x):
+        if x < 0:
+            return 0
+        return x
+
+    df_bills_3 = group_bill_df(df_bills_allrows, ['2023', '1'])
+    df_bills_3 = df_bills_3.dropna(axis=0, subset="ultimo mes")
+    df_bills_3['meses pendientes'] = df_bills_3['ultimo mes'].apply(lambda x: only_positive(month2num(current_month) - month2num(x) + 1) )
+    df_bills_3['meses pendientes diferido'] = df_bills_3['mes'].apply(lambda x: only_positive(month_diff - len(x)))
+    df_bills_3['cliente perdido'] = (df_bills_3['meses pendientes'] > due_alarm[0]) |  (df_bills_3['meses pendientes diferido'] > due_alarm[1])
+
+    columns = ['Date', 'Memo/Description', 'mes', 'meses pendientes', 'meses pendientes diferido']
+    lost_clients = df_bills_3[df_bills_3['cliente perdido']][columns].to_html()
+    
+    #reporte final
+    ###############################################################
+    html_style = """
+    <style>
+    table {
+      font-family: consola;
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    td, th {
+      border: 1px solid #dddddd;
+      text-align: left;
+      padding: 8px;
+    }
+
+    tr:nth-child(even) {
+      background-color: #dddddd;
+    }
+    </style>
+    """
+
+    reporte_file = os.path.join(outputs_dir,"reporte.html")
+    with open(reporte_file, "w") as fh:
+        fh.write(html_style)
+        fh.write("<center><h1> ASOARCOS: reporte de mensualidades</h1></center>")
+        for fig in figs:
+            fh.write(fig.to_html())
+        fh.write("<center><h3> Usuarios perdidos</h3></center>")
+        fh.write("<b> Meses pendientes: </b> numero de meses reales que se deben</br>")
+        fh.write("<b> Meses pendientes diferido: </b> se toma un periodo de tiempo, por ejemplo 6 meses y si en el ultimo mes se pagaron 4 meses totales entonces el numero de meses pendientes diferido es 2 </br>")
+        fh.write(lost_clients)
+    print("Reporte web generado: {}".format(reporte_file))
+
 print("Fin del proceso.")
 
