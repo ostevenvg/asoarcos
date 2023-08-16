@@ -88,9 +88,9 @@ def normalize_fecha(in_date):
 
 def get_account(bank):
     accounts = {
-        'bac': 'Cuenta del bac',
-        'bcr': 'Cuenta del banco de costa rica',
-        'bn' : 'Cuenta del nacional'}
+        'bac': '10205 BAC S.J.906883251 Colones',
+        'bcr': '10201 BCR 160198-9',
+        'bn' : '10203 BNCR 100-01-000-216002-6 ₡'}
     return accounts[bank]
     
 def month2num(x):
