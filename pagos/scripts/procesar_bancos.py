@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import os, sys
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[ ]:
+# In[6]:
 
 
 def get_casas_from_description(d):
@@ -96,7 +96,7 @@ def fix_credit_column(c):
         c = str(c)
         m = re.search(r'(.*)\+', c, re.I)
         if m:
-            return m.group(1)
+            return float(m.group(1).replace(',',''))
         m = re.search(r'(.*)\-', c, re.I)
         if m:
             return np.nan
@@ -193,7 +193,7 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     return bankdf
 
 
-# In[ ]:
+# In[7]:
 
 
 ########### MAIN ############
@@ -253,4 +253,10 @@ else:
     print("Error: no fue encontrado el excel de ningun banco. Nada creado.")
 
 print("Fin del proceso.")
+
+
+# In[ ]:
+
+
+
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import os, sys, calendar
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[ ]:
+# In[25]:
 
 
 ############### Functions to get and generated paid months ################
@@ -68,6 +68,8 @@ def gen_next_description(lastmonth, nmonths=1):
 
 def normalize_fecha(in_date):
     m = re.match(r'(\d*)/(\d*)(/(\d*))?',in_date)
+    if not m:
+        m = re.match(r'(\d*)-(\d*)(-(\d*))?',in_date)
     if m:
         day = m.group(1)
         month = m.group(2)
@@ -84,13 +86,20 @@ def normalize_fecha(in_date):
     else:
         return [None, None]
 
+def get_account(bank):
+    accounts = {
+        'bac': 'Cuenta del bac',
+        'bcr': 'Cuenta del banco de costa rica',
+        'bn' : 'Cuenta del nacional'}
+    return accounts[bank]
+    
 def month2num(x):
     return (int(x[0])-2000)*12+int(x[1])
     
 def num2month(x):
     return [2000 + math.floor((x-1)/12), x-12*math.floor((x-1)/12)]
 
-def get_description_months(description): 
+def get_description_months(description):
     out = list()
     d = description.upper()
     d = d.replace('.', ',')
@@ -176,7 +185,7 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[ ]:
+# In[26]:
 
 
 ########### MAIN ############
@@ -205,7 +214,7 @@ print("Procesando facturas de Quickbooks")
 [df_bills_allrows, df_bills] = process_bill_excel(inputs_dir)
 
 
-# In[ ]:
+# In[27]:
 
 
 #Process bancos if found, to create file that will be imported to quickbooks
@@ -238,12 +247,36 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
         max_bill_num = max(df_bills_allrows['Num'].astype(int))
         df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+max_bill_num +1)
         df_bancos_qb['InvoiceDate'], df_bancos_qb['DueDate'] = zip(*df_bancos_qb['fecha'].map(normalize_fecha))
-        df_bancos_qb['Item(Product/Service)'] = "Aporte Comunal (Seguridad, Limpieza y Mantenimiento)"
+        df_bancos_qb['Memo'] = df_bancos_qb['ItemDescription']
+        df_bancos_qb['ReferenceNo'] = df_bancos_qb['banco'] + ':' + df_bancos_qb['referencia'].astype(str)
+        df_bancos_qb['Item(Product/Service)'] = 40
         
-        csv_columns = ['InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'Item(Product/Service)', 'ItemDescription', 'ItemAmount']
+        csv_columns = ['ReferenceNo', 'InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'Item(Product/Service)', 'ItemDescription', 'Memo', 'ItemAmount']
         qb_csv = os.path.join(outputs_dir,"qb_import.csv")
         df_bancos_qb[csv_columns].to_csv(qb_csv,index=False)
-        print("CSV generado (archivo que se importa en Quickbooks): {}".format(qb_csv))
+        df_bancos_qb[csv_columns].to_excel(qb_csv.replace('csv','xlsx'),index=False)
+        print("Import CSV generado (archivo para importar las facturas a Quickbooks): {}".format(qb_csv))
+        
+        
+        #paymets import format
+        
+        df_bancos_payimport = df_bancos_qb.rename(columns={ 
+            'InvoiceNo': 'Txn ID',
+            'InvoiceDate': 'Payment date',
+            'ReferenceNo': 'Payment Ref Number'})
+        df_bancos_payimport['Amount'] = df_bancos_payimport['ItemAmount']
+        df_bancos_payimport['Total amount'] = df_bancos_payimport['Amount']
+        #df_bancos_payimport['Deposit to account'] = 'Cash and cash equivalents'
+        df_bancos_payimport['Deposit to account'] = df_bancos_payimport['banco'].apply(get_account)
+        df_bancos_payimport['Txn type'] = 'Invoice'
+        df_bancos_payimport['Payment method'] = 'cash' 
+        pay_columns = ['Customer', 'Deposit to account', 'Amount', 'Total amount',
+                       'Txn ID', 'Txn type', 'Payment method', 'Payment date',
+                       'Memo', 'Payment Ref Number']
+        pay_excel = os.path.join(outputs_dir,"qb_payment_import.xlsx")
+        df_bancos_payimport[pay_columns].to_excel(pay_excel,index=False)
+        print("Excel de pagos generado (Archivo que se usa para importar los pagos a Quickbooks): {}".format(pay_excel))
+      
         add_for_quickbooks = True
 
 #Save excel
