@@ -67,6 +67,6 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
     df = pd.DataFrame(table_rows).dropna(axis=0, how="all").dropna(axis=1, how="all")
     if not df.empty:
         df.columns = df.iloc[0]
-        df = df.tail(-1)
+        #df = df.tail(-1)
     return df
     
