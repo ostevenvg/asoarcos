@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[4]:
 
 
 import os, sys
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[ ]:
+# In[5]:
 
 
 def get_casas_from_description(d):
@@ -18,6 +18,7 @@ def get_casas_from_description(d):
     casas = []
     d=d.upper()
     
+    d = d.replace('CSA','CASA')
     m = re.match(r'.*CASAS?\s*([\d\-Y,\s\/_]*)',d)
     if m:
         casas = m.group(1)
@@ -63,7 +64,10 @@ def get_casa_from_customer(c):
     
     return out 
 
-def fuzzy_match_customer(description, casas):
+def fuzzy_match_customer(customer, description, casas):
+    if customer:
+        return customer
+
     if not isinstance(description,str):
         return []
     ratio = 0
@@ -85,7 +89,7 @@ def fuzzy_match_customer(description, casas):
             d = d.replace(ignore,' ')
 
         fm = process.extract(d, dict_customers.keys(),  scorer=fuzz.token_set_ratio, limit=1)
-        if fm[0][1] > 80:
+        if fm[0][1] > 95:
             customers.append(dict_customers[fm[0][0]])
     return customers
 
@@ -186,8 +190,8 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     bankdf['casas']=bankdf['descripcion'].apply(get_casas_from_description)
     
     #Try to guess customers
-    #bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_customer(x['descripcion'], x['casas']), axis=1)
     bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_description_hist(x['descripcion']), axis=1)
+    bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_customer(x['cliente'], x['descripcion'], x['casas']), axis=1)
     bankdf['cliente'] = bankdf['cliente'].apply(lambda x: ', '.join(x) if isinstance(x,list) else '')
     
     #bankdf.credito.astype('float')
