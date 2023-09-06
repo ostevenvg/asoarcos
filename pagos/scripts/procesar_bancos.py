@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import os, sys
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[6]:
+# In[ ]:
 
 
 def get_casas_from_description(d):
@@ -89,6 +89,16 @@ def fuzzy_match_customer(description, casas):
             customers.append(dict_customers[fm[0][0]])
     return customers
 
+def fuzzy_match_description_hist(description):
+    if not isinstance(description,str):
+        return []
+    ratio = 0
+    customers = []
+    
+    fm = process.extract(description, description_hist['descripcion'],  scorer=fuzz.token_set_ratio, limit=1)
+    if fm[0][1] > 90:
+        customers = list(description_hist[description_hist.descripcion == fm[0][0]].cliente)
+    return customers   
 
 def fix_credit_column(c):
     out = c
@@ -166,6 +176,7 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     #keep only rows with credits
     bankdf.dropna(axis=0, subset="credito", inplace=True)
     
+
     #keep only configured columns
     bankdf=bankdf[1:][bank_cols.values()]
     
@@ -175,32 +186,27 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     bankdf['casas']=bankdf['descripcion'].apply(get_casas_from_description)
     
     #Try to guess customers
-    bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_customer(x['descripcion'], x['casas']), axis=1)
+    #bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_customer(x['descripcion'], x['casas']), axis=1)
+    bankdf['cliente'] = bankdf.apply(lambda x: fuzzy_match_description_hist(x['descripcion']), axis=1)
     bankdf['cliente'] = bankdf['cliente'].apply(lambda x: ', '.join(x) if isinstance(x,list) else '')
     
-    #Explode clients
-    #df['cliente']=df['cliente'].str.split(',')
-   # df.assign(credito=df['credito'].div(df['cliente'].str.len())).explode('cliente')
-
-    #Try to guess numero de casas and meses pagados
-    bankdf['num casas'] = bankdf['casas'].apply(lambda x: len(x) if isinstance(x,list) else 0)
-    bankdf.credito.astype('float')
+    #bankdf.credito.astype('float')
     
-    #df['is_casa'], df['casa'], df['name'] = zip(*df['Customer'].map(get_casa_from_customer))
     #bankdf['num meses'] = bankdf['credito'].apply(check_payment)
     bankdf['num meses'], bankdf['agua patos'] = zip(*bankdf['credito'].apply(check_payment))
     
     return bankdf
 
 
-# In[7]:
+# In[ ]:
 
 
 ########### MAIN ############
 
 #work directory
 if is_interactive():
-    sys.argv = ['', "/Users/oscar/Documents/work/qb_example/"]
+    sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\qb_test\Junio']
+    #sys.argv = ['', r"/Users/oscar/Documents/work/qb_example/"]
 if len(sys.argv) != 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
@@ -231,6 +237,7 @@ df_main_config = pd.read_excel(config_excel, sheet_name="principal").dropna(axis
 main_config = df_main_config.set_index("item").to_dict()['valor']
 df_bank_config = pd.read_excel(config_excel, sheet_name="columnas bancos").dropna(axis=1, how="all")
 bank_config = df_bank_config.set_index("columna").to_dict()
+description_hist =  pd.read_excel(config_excel, sheet_name="descripciones anteriores").dropna(axis=1, how="all")
 
 #Load all banks data
 bank_dfs = []

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import os, sys, calendar
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[25]:
+# In[ ]:
 
 
 ############### Functions to get and generated paid months ################
@@ -90,7 +90,7 @@ def get_account(bank):
     accounts = {
         'bac': '10205 BAC S.J.906883251 Colones',
         'bcr': '10201 BCR 160198-9',
-        'bn' : '10203 BNCR 100-01-000-216002-6 ₡'}
+        'bn' : '10203 BNCR 100-01-000-216002-6'}
     return accounts[bank]
     
 def month2num(x):
@@ -101,6 +101,9 @@ def num2month(x):
 
 def get_description_months(description):
     out = list()
+    if not isinstance(description, str):
+        return out
+
     d = description.upper()
     d = d.replace('.', ',')
     d = d.replace('-',', ')
@@ -185,14 +188,14 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[26]:
+# In[ ]:
 
 
 ########### MAIN ############
 #work directory
 if is_interactive():
-    #sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\asoarcos\pagos\inputs_example']
-    sys.argv = ['', r"/Users/oscar/Documents/work/qb_example/"]
+    sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\qb_test\Junio']
+    #sys.argv = ['', r"/Users/oscar/Documents/work/qb_example/"]
 if len(sys.argv) < 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
@@ -209,12 +212,31 @@ outputs_dir = os.path.join(inputs_dir, "salidas")
 if not os.path.exists(outputs_dir):
     os.makedirs(outputs_dir)
 
+#Load configuration
+config_path = os.path.join(inputs_dir, "config.xlsx")
+if os.path.exists(config_path):
+    config_excel = config_path
+else:
+    config_excel = "config.xlsx"
+
+print("Leyendo la configuracion desde: " + config_excel)
+df_client_config = pd.read_excel(config_excel, sheet_name="excepciones clientes").dropna(axis=1, how="all")
+ignore_clients = list(df_client_config[df_client_config.ignorar == "si"]['cliente'])
+    
 #Load bills
 print("Procesando facturas de Quickbooks")
 [df_bills_allrows, df_bills] = process_bill_excel(inputs_dir)
 
+#Check if there are bills with empty description
+df_bad_bills = df_bills_allrows[df_bills_allrows['Memo/Description'].isna()]
+if not df_bad_bills.empty:
+    print("ERROR: las siguientes facturas tienen una descripcion vacia")
+    for index, row in df_bad_bills[['Num', 'Name']].iterrows():
+        print(' - Factura: {}  Cliente: {}'.format(row['Num'], row['Name']))
+    exit(1)
 
-# In[27]:
+
+# In[ ]:
 
 
 #Process bancos if found, to create file that will be imported to quickbooks
@@ -233,8 +255,8 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
         for client in list(df_bad_clientes['cliente']):
             print(' - {}'.format(client))
     else:
-        df_bancos_valid =  df_bancos.loc[(df_bancos['cliente'].notna()) & (df_bancos['num casas'].notna()) & (df_bancos['num meses'].notna()) &
-                  (df_bancos['num casas'] != 0) & (df_bancos['num meses'] != 0)]
+        df_bancos_valid =  df_bancos.loc[(df_bancos['cliente'].notna()) & (df_bancos['num meses'].notna()) &
+                           (df_bancos['num meses'] != 0)]
         df_bancos_valid = df_bancos_valid.merge(df_bills, how='left', on=['cliente'])
         df_bancos_valid['siguiente descripcion'] = df_bancos_valid.apply(lambda x: gen_next_description(x['ultimo mes'],x['num meses']), axis=1)
         df_bancos_valid.rename(columns={"descripcion": "detalle banco"}, inplace=True)
@@ -269,7 +291,7 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
         #df_bancos_payimport['Deposit to account'] = 'Cash and cash equivalents'
         df_bancos_payimport['Deposit to account'] = df_bancos_payimport['banco'].apply(get_account)
         df_bancos_payimport['Txn type'] = 'Invoice'
-        df_bancos_payimport['Payment method'] = 'cash' 
+        df_bancos_payimport['Payment method'] = 'Transference' 
         pay_columns = ['Customer', 'Deposit to account', 'Amount', 'Total amount',
                        'Txn ID', 'Txn type', 'Payment method', 'Payment date',
                        'Memo', 'Payment Ref Number']
@@ -333,7 +355,7 @@ if 'gen_report' in tasks:
     ###############################################################
     df_bills_1= df_bills.dropna(axis=0, subset="ultimo mes").explode('mes')
     df_bills_1['mes'] = df_bills_1['mes'].apply(lambda x: str(x[0])+'-'+str(x[1]))
-    fig = px.histogram(df_bills_1, x = "mes", text_auto=True, title = "Meses cancelados")
+    fig = px.histogram(df_bills_1, x = "mes", text_auto=True, title = "Mensualidades pagadas")
     fig.update_layout(bargap=0.2)
     figs.append(fig)
 
@@ -357,7 +379,7 @@ if 'gen_report' in tasks:
     df_bills_3['cliente perdido'] = (df_bills_3['meses pendientes'] > due_alarm[0]) |  (df_bills_3['meses pendientes diferido'] > due_alarm[1])
 
     columns = ['Date', 'Memo/Description', 'mes', 'meses pendientes', 'meses pendientes diferido']
-    lost_clients = df_bills_3[df_bills_3['cliente perdido']][columns].to_html()
+    lost_clients = df_bills_3[df_bills_3['cliente perdido'] & ~df_bills_3.index.isin(ignore_clients)][columns].to_html()
     
     #reporte final
     ###############################################################
