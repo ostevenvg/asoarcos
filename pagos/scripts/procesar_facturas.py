@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[57]:
 
 
 import os, sys, calendar
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[ ]:
+# In[58]:
 
 
 ############### Functions to get and generated paid months ################
@@ -43,8 +43,9 @@ def gen_month_description(y, mlist):
         return "DE {} A {} {}".format(MONTHS[mlist[0]],MONTHS[mlist[-1]],y)
     else:
         return "{} {}".format(MONTHS[mlist[0]],y)
-    
-def gen_next_description(lastmonth, nmonths=1):
+
+        
+def gen_next_description(lastmonth, nmonths=1, return_month=False):
     if not isinstance(lastmonth,list):
         lastmonth = [dt.datetime.today().year-1,12]
 
@@ -64,7 +65,10 @@ def gen_next_description(lastmonth, nmonths=1):
         mlist.append(m)
     d.append(gen_month_description(y, mlist))
     
-    return "MES AL COBRO " + ' Y '.join(d)
+    if return_month:
+        return [y, m]
+    else:
+        return "MES AL COBRO " + ' Y '.join(d)
 
 def normalize_fecha(in_date):
     m = re.match(r'(\d*)/(\d*)(/(\d*))?',in_date)
@@ -188,14 +192,14 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[ ]:
+# In[59]:
 
 
 ########### MAIN ############
 #work directory
 if is_interactive():
-    sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\qb_test\Junio']
-    #sys.argv = ['', r"/Users/oscar/Documents/work/qb_example/"]
+    #sys.argv = ['', r'C:\Users\villalta\Documents\Personal\repos\qb_test\Junio']
+    sys.argv = ['', r"/Users/oscar/Documents/work/qb_example2/"]
 if len(sys.argv) < 2:
     print("Error: Se debe indicar el directorio donde estan las entradas")
     exit(1)
@@ -236,7 +240,7 @@ if not df_bad_bills.empty:
     exit(1)
 
 
-# In[ ]:
+# In[60]:
 
 
 #Process bancos if found, to create file that will be imported to quickbooks
@@ -258,6 +262,15 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
         df_bancos_valid =  df_bancos.loc[(df_bancos['cliente'].notna()) & (df_bancos['num meses'].notna()) &
                            (df_bancos['num meses'] != 0)]
         df_bancos_valid = df_bancos_valid.merge(df_bills, how='left', on=['cliente'])
+        
+        #Add month offset when more than one payment from same client in one month
+        df_bancos_valid.sort_values(['cliente','fecha'],inplace=True)
+        df_bancos_valid.reset_index(inplace=True)
+        for i in range(1, len(df_bancos_valid)):
+            if df_bancos_valid.loc[i,'cliente'] == df_bancos_valid.loc[i-1,'cliente']:
+                df_bancos_valid.at[i,'ultimo mes'] = gen_next_description(df_bancos_valid.loc[i-1,'ultimo mes'],
+                                 df_bancos_valid.loc[i-1,'num meses'],return_month=True)
+        
         df_bancos_valid['siguiente descripcion'] = df_bancos_valid.apply(lambda x: gen_next_description(x['ultimo mes'],x['num meses']), axis=1)
         df_bancos_valid.rename(columns={"descripcion": "detalle banco"}, inplace=True)
           
@@ -311,7 +324,7 @@ with pd.ExcelWriter(facturas_file) as writer:
 print("Excel generado: {}".format(facturas_file))
 
 
-# In[ ]:
+# In[61]:
 
 
 if 'gen_report' in tasks:
@@ -416,4 +429,10 @@ if 'gen_report' in tasks:
     print("Reporte web generado: {}".format(reporte_file))
 
 print("Fin del proceso.")
+
+
+# In[ ]:
+
+
+
 
