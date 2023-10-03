@@ -142,7 +142,8 @@ def check_payment(amount, m=None, recursive=True):
             return [0, 0]
         
 def process_customers_excel(inputs_dir):
-    df = gendf_from_excel_table(os.path.join(inputs_dir, "clientes_quickbooks.xlsx"),['Customer', 'Email'],stop_if_empty=False)
+    df = gendf_from_excel_table(os.path.join(inputs_dir, "clientes_quickbooks.xlsx"),['Customer full name', 'Email address'],stop_if_empty=False)
+    df.rename(columns={"Customer full name":"Customer", "Email adress": "Email"}, inplace=True)
     
     #split casa and name
     df['is_casa'], df['casa'], df['name'] = zip(*df['Customer'].map(get_casa_from_customer))
@@ -223,7 +224,13 @@ if not os.path.exists(inputs_dir):
 outputs_dir = os.path.join(inputs_dir, "salidas")
 if not os.path.exists(outputs_dir):
     os.makedirs(outputs_dir)
-    
+
+#Double check that banks excel doesnt exists (it is dangerous to overwritte this)
+bank_excel = os.path.join(outputs_dir, "bancos.xlsx")
+if os.path.exists(bank_excel):
+    print("Error: El archivo {} ya existe. Si desea regenerarlo borrelo manualmente antes de correr Procesar Bancos.".format(bank_excel))
+    exit(1)
+
 #Load customers
 df_customers = process_customers_excel(inputs_dir)
 dict_customers = df_customers[df_customers['is_casa']][['Customer', 'name']].dropna().set_index('name').to_dict()['Customer']
@@ -255,7 +262,6 @@ if bank_dfs:
     df = pd.concat(bank_dfs).reset_index(drop=True)
 
     #Save excel
-    bank_excel = os.path.join(outputs_dir, "bancos.xlsx")
     with pd.ExcelWriter(bank_excel) as writer:
         df.to_excel(writer, index=False, sheet_name='bancos')
         df_customers.to_excel(writer, index=False, sheet_name='clientes')
