@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[57]:
+# In[1]:
 
 
 import os, sys, calendar
@@ -9,7 +9,7 @@ sys.path.append(os.getcwd().replace('notebooks','scripts'))
 from utilities import *
 
 
-# In[58]:
+# In[2]:
 
 
 ############### Functions to get and generated paid months ################
@@ -192,7 +192,7 @@ def process_bill_excel(inputs_dir):
     return [df_allrows, df] 
 
 
-# In[59]:
+# In[3]:
 
 
 ########### MAIN ############
@@ -240,7 +240,7 @@ if not df_bad_bills.empty:
     exit(1)
 
 
-# In[60]:
+# In[29]:
 
 
 #Process bancos if found, to create file that will be imported to quickbooks
@@ -280,21 +280,32 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
                                                        'credito':'ItemAmount'})
         
         max_bill_num = max(df_bills_allrows['Num'].astype(int))
-        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+max_bill_num +1)
+        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+max_bill_num + 10)
         df_bancos_qb['InvoiceDate'], df_bancos_qb['DueDate'] = zip(*df_bancos_qb['fecha'].map(normalize_fecha))
         df_bancos_qb['Memo'] = df_bancos_qb['ItemDescription']
         df_bancos_qb['ReferenceNo'] = df_bancos_qb['banco'] + ':' + df_bancos_qb['referencia'].astype(str)
         df_bancos_qb['Item(Product/Service)'] = 40
+        df_qb_csv = df_bancos_qb.copy()
         
+        #add patos product if any
+        for index, row in df_bancos_qb.iterrows():
+            row = row.to_dict()
+            if row["agua patos"] == 1:
+                row['ItemDescription'] = "Aporte extraordinario agua de los lagos"
+                row['Item(Product/Service)'] = "41 Cuota extraordinaria"
+                row['ItemAmount'] = 0
+                df_qb_csv = pd.concat([df_qb_csv, pd.DataFrame.from_dict(row, orient='index').transpose()])
+        df_qb_csv.sort_values(by=['InvoiceNo','Item(Product/Service)'], inplace=True)    
+        
+        #save bills import csv
         csv_columns = ['ReferenceNo', 'InvoiceNo', 'InvoiceDate', 'DueDate', 'Customer', 'Item(Product/Service)', 'ItemDescription', 'Memo', 'ItemAmount']
         qb_csv = os.path.join(outputs_dir,"qb_import.csv")
-        df_bancos_qb[csv_columns].to_csv(qb_csv,index=False)
-        df_bancos_qb[csv_columns].to_excel(qb_csv.replace('csv','xlsx'),index=False)
+        df_qb_csv[csv_columns].to_csv(qb_csv,index=False)
+        df_qb_csv[csv_columns].to_excel(qb_csv.replace('csv','xlsx'),index=False)
         print("Import CSV generado (archivo para importar las facturas a Quickbooks): {}".format(qb_csv))
         
         
         #paymets import format
-        
         df_bancos_payimport = df_bancos_qb.rename(columns={ 
             'InvoiceNo': 'Txn ID',
             'InvoiceDate': 'Payment date',
@@ -324,7 +335,7 @@ with pd.ExcelWriter(facturas_file) as writer:
 print("Excel generado: {}".format(facturas_file))
 
 
-# In[61]:
+# In[ ]:
 
 
 if 'gen_report' in tasks:
@@ -341,13 +352,14 @@ if 'gen_report' in tasks:
 
     paid_months = list()
     d_map = ['mes actual', 'mes anterior', 'hace dos meses', 'hace tres meses']
-    for m in range(1,13):
-        month = ['2023', str(m)]
-        m_s = '-'.join(month)
-        m_n = month2num(month)
-        for d in [0, 1, 2, 3]:
-            c = df_bills_[(df_bills_['mes_factura_n'] <= m_n) & (df_bills_['mes_n'] == m_n-d)].shape[0]
-            paid_months.append([m_s, d_map[d], c])
+    for y in range(2022,2024):
+        for m in range(1,13):
+            month = [str(y), str(m)]
+            m_s = '-'.join(month)
+            m_n = month2num(month)
+            for d in [0, 1, 2, 3]:
+                c = df_bills_[(df_bills_['mes_factura_n'] <= m_n) & (df_bills_['mes_n'] == m_n-d)].shape[0]
+                paid_months.append([m_s, d_map[d], c])
 
     df = pd.DataFrame(paid_months, columns = ['mes', 'al dia con respecto a', 'numero de asociados'])
     fig = px.bar(df, x='mes', y='numero de asociados', color='al dia con respecto a', barmode="group",
