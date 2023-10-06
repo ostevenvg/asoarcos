@@ -352,7 +352,7 @@ if 'gen_report' in tasks:
 
     paid_months = list()
     d_map = ['mes actual', 'mes anterior', 'hace dos meses', 'hace tres meses']
-    for y in range(2022,2024):
+    for y in range(2021,2024):
         for m in range(1,13):
             month = [str(y), str(m)]
             m_s = '-'.join(month)
