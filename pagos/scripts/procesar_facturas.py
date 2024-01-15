@@ -253,11 +253,13 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
     df_bancos = pd.read_excel(banks_file , sheet_name='bancos')
     df_clientes = pd.read_excel(banks_file , sheet_name='clientes')
     #validate if clientes row is correct
-    df_bad_clientes = df_bancos[df_bancos['cliente'].isin(df_clientes['Customer']) == False]
-    if df_bad_clientes.empty:
-        print("ERROR: los siguientes clientes no son validos, revise si se escribieron incorrectamente o sin son validos pero son mas de uno separelos en varias filas en el excel bancos.xlsx (un cliente por fila)")
+    df_bad_clientes = df_bancos[(df_bancos['cliente'].notna()) & (df_bancos['num meses'].notna()) & 
+                                (df_bancos['cliente'].isin(df_clientes['Customer']) == False)]
+    if df_bad_clientes.empty == False:
+        print("\nERROR: los siguientes clientes en el archivo bancos.xlsx no son validos. Se escribieron incorrectamente o hay mas de un cliente en una misma fila:\n")
         for client in list(df_bad_clientes['cliente']):
             print(' - {}'.format(client))
+        exit(1)
     else:
         df_bancos_valid =  df_bancos.loc[(df_bancos['cliente'].notna()) & (df_bancos['num meses'].notna()) &
                            (df_bancos['num meses'] != 0)]
@@ -278,9 +280,11 @@ if 'gen_qb_csv' in tasks and os.path.exists(banks_file ):
         df_bancos_qb = df_bancos_valid.rename(columns={'cliente':'Customer', 
                                                        'siguiente descripcion':'ItemDescription', 
                                                        'credito':'ItemAmount'})
+        df_bancos_qb.reset_index(inplace=True)
         
-        max_bill_num = max(df_bills_allrows['Num'].astype(int))
-        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+max_bill_num + 10)
+        next_bill_num = df_bills_allrows['Num'].astype(int).max() + 1
+        print(next_bill_num)
+        df_bancos_qb.insert(0,'InvoiceNo',df_bancos_qb.index+next_bill_num)
         df_bancos_qb['InvoiceDate'], df_bancos_qb['DueDate'] = zip(*df_bancos_qb['fecha'].map(normalize_fecha))
         df_bancos_qb['Memo'] = df_bancos_qb['ItemDescription']
         df_bancos_qb['ReferenceNo'] = df_bancos_qb['banco'] + ':' + df_bancos_qb['referencia'].astype(str)

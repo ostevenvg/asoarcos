@@ -39,6 +39,7 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
     
     table_rows = []
     valid_row = False
+    prev_rowl_count = 0
     for row in row_range:
         rowl = []
         for col in col_range:
@@ -57,9 +58,12 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
             if all(item in rowl for item in table_cols): #we found the headers
                 valid_row = True
              
-        if stop_if_empty and valid_row and (rowl.count(np.nan) + rowl.count(''))/len(rowl) > 0.9: #stop if more than 90% of cells are empty
+        #if stop_if_empty and valid_row and (rowl.count(np.nan) + rowl.count(''))/len(rowl) > 0.9: #stop if more than 90% of cells are empty
+        if stop_if_empty and valid_row and (len(rowl) - rowl.count(np.nan) - rowl.count('')) < prev_rowl_count: 
             break
-
+        if len(table_rows) > 0:
+            prev_rowl_count = len(rowl) - rowl.count(np.nan) - rowl.count('')
+        
         if valid_row:
             table_rows.append(rowl)
     
