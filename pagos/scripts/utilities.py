@@ -59,7 +59,7 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
                 valid_row = True
              
         #if stop_if_empty and valid_row and (rowl.count(np.nan) + rowl.count(''))/len(rowl) > 0.9: #stop if more than 90% of cells are empty
-        if stop_if_empty and valid_row and (len(rowl) - rowl.count(np.nan) - rowl.count('')) < prev_rowl_count:
+        if stop_if_empty and valid_row and (len(rowl) - rowl.count(np.nan) - rowl.count('')) < prev_rowl_count -1:
             if row < 0.8 * row_range[-1]:
                 print(f"Error: se procesaron muy pocas lineas. Revise si la tabla del archivo '{input_file}' tiene errors como columnas desalineadas o celdas extra.")
                 exit(-1)
@@ -69,7 +69,7 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
         
         if valid_row:
             table_rows.append(rowl)
-    
+
     #create dataframe
     df = pd.DataFrame(table_rows).dropna(axis=0, how="all").dropna(axis=1, how="all")
     if not df.empty:

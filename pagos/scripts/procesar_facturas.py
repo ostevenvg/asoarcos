@@ -356,7 +356,7 @@ if 'gen_report' in tasks:
 
     paid_months = list()
     d_map = ['mes actual', 'mes anterior', 'hace dos meses', 'hace tres meses']
-    for y in range(2021,2024):
+    for y in range(2023,2025):
         for m in range(1,13):
             month = [str(y), str(m)]
             m_s = '-'.join(month)
@@ -392,22 +392,30 @@ if 'gen_report' in tasks:
     #Clientes perdidos
     ###############################################################
     due_alarm = [3, 2] #meses pendientes, meses pendientes diferido
-    start_month = ['2023', '1']
-    current_month = ['2023', '6']
+    start_month = ['2023', '9']
+    current_month = ['2024', '7']
     month_diff = month2num(current_month) - month2num(start_month) + 1
 
     def only_positive(x):
         if x < 0:
             return 0
         return x
+        
+    def elap_months (start_date):
+        month_diff = month2num(current_month) - month2num([start_date.year, start_date.month]) + 1
+        return month_diff
 
-    df_bills_3 = group_bill_df(df_bills_allrows, ['2023', '1'])
+    df_bills_3 = group_bill_df(df_bills_allrows, start_month)
     df_bills_3 = df_bills_3.dropna(axis=0, subset="ultimo mes")
     df_bills_3['meses pendientes'] = df_bills_3['ultimo mes'].apply(lambda x: only_positive(month2num(current_month) - month2num(x) + 1) )
     df_bills_3['meses pendientes diferido'] = df_bills_3['mes'].apply(lambda x: only_positive(month_diff - len(x)))
-    df_bills_3['cliente perdido'] = (df_bills_3['meses pendientes'] > due_alarm[0]) |  (df_bills_3['meses pendientes diferido'] > due_alarm[1])
-
-    columns = ['Date', 'Memo/Description', 'mes', 'meses pendientes', 'meses pendientes diferido']
+    #df_bills_3['cliente perdido'] = (df_bills_3['meses pendientes'] > due_alarm[0]) |  (df_bills_3['meses pendientes diferido'] > due_alarm[1])
+    df_bills_3['ultimo pago'] = df_bills_3['Date'].apply(lambda x: x[-1])
+    df_bills_3['meses perdido'] = df_bills_3['Date'].apply(lambda x: elap_months(x[-1]))
+    df_bills_3['cliente perdido'] = (df_bills_3['meses pendientes'] > 3) | ((df_bills_3['meses pendientes'] > 0) & (df_bills_3['meses perdido']>3))
+     
+    #columns = ['Date', 'Memo/Description', 'mes', 'ultimo pago', 'meses pendientes', 'meses perdido']
+    columns = ['ultimo pago', 'meses pendientes', 'meses perdido']
     lost_clients = df_bills_3[df_bills_3['cliente perdido'] & ~df_bills_3.index.isin(ignore_clients)][columns].to_html()
     
     #reporte final
@@ -440,7 +448,6 @@ if 'gen_report' in tasks:
             fh.write(fig.to_html())
         fh.write("<center><h3> Usuarios perdidos</h3></center>")
         fh.write("<b> Meses pendientes: </b> numero de meses reales que se deben</br>")
-        fh.write("<b> Meses pendientes diferido: </b> se toma un periodo de tiempo, por ejemplo 6 meses y si en el ultimo mes se pagaron 4 meses totales entonces el numero de meses pendientes diferido es 2 </br>")
         fh.write(lost_clients)
     print("Reporte web generado: {}".format(reporte_file))
 
