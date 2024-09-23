@@ -141,8 +141,8 @@ def check_payment(amount, m=None, recursive=True):
         else:
             return [0, 0]
         
-def process_customers_excel(inputs_dir):
-    df = gendf_from_excel_table(os.path.join(inputs_dir, "clientes_quickbooks.xlsx"),['Customer full name', 'Email address'],stop_if_empty=False)
+def process_customers_excel(excel_clientes):
+    df = gendf_from_excel_table(excel_clientes,['Customer full name', 'Email address'],stop_if_empty=False)
     df.rename(columns={"Customer full name":"Customer", "Email adress": "Email"}, inplace=True)
     
     #split casa and name
@@ -173,7 +173,7 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     bankdf.rename(columns=bank_cols, inplace=True)
     bankdf.replace(0, np.nan, inplace=True)
     bankdf.replace('''''', np.nan, inplace=True)
-    
+
     #Fix credito colums when +- symbols are used
     bankdf['credito_tmp'] = bankdf['credito'].apply(fix_credit_column)
     bankdf['credito'] = bankdf['credito_tmp']
@@ -181,10 +181,13 @@ def process_bank_excel(inputs_dir,bank,bank_config):
     #keep only rows with credits
     bankdf.dropna(axis=0, subset="credito", inplace=True)
     
-
     #keep only configured columns
     bankdf=bankdf[1:][bank_cols.values()]
-    
+
+    #Take out non numeric credit rows and description
+    bankdf=bankdf[pd.to_numeric(bankdf['credito'], errors='coerce').notnull()]
+    bankdf=bankdf[bankdf['descripcion'].notnull()]
+
     #add bank columns
     bankdf.insert(0,'excel',bank_excel)
     bankdf.insert(0,'banco',bank)
@@ -232,7 +235,9 @@ if os.path.exists(bank_excel):
     exit(1)
 
 #Load customers
-df_customers = process_customers_excel(inputs_dir)
+excel_clientes = os.path.join(inputs_dir, "clientes_quickbooks.xlsx")
+print(f"Cargando clientes desde: {excel_clientes}")
+df_customers = process_customers_excel(excel_clientes)
 dict_customers = df_customers[df_customers['is_casa']][['Customer', 'name']].dropna().set_index('name').to_dict()['Customer']
 casa_customers = list(df_customers[df_customers['is_casa']]['Customer'])
 
@@ -257,13 +262,13 @@ for bank in bank_config:
     bank_df = process_bank_excel(inputs_dir, bank, bank_config)
     if not bank_df.empty:
         bank_dfs.append(bank_df)
+print("Transferencias bancarias cargadas exitosamente")
 
 if bank_dfs:
     df = pd.concat(bank_dfs).reset_index(drop=True)
-
     #Save excel
     with pd.ExcelWriter(bank_excel) as writer:
-        df.to_excel(writer, index=False, sheet_name='bancos')
+        df.to_excel(writer, index=False, sheet_name='bancos') 
         df_customers.to_excel(writer, index=False, sheet_name='clientes')
     print("Excel creado: {}".format(bank_excel))
 else:
