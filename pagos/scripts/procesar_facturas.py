@@ -82,8 +82,12 @@ def normalize_fecha(in_date):
             if len(year) == 2:
                 year = str(dt.datetime.today().year)[:2] + year
         else:
-            year = str(dt.datetime.today().year)
-            
+            year = dt.datetime.today().year
+            if int(month) > dt.datetime.today().month: #It has to be from previous year
+                year = year -1
+                print(f"Fecha '{in_date}' en el excel bancos sin year, como el mes es mayor al actual, usando '{year}'")
+            year = str(year)
+
         norm_date = '{}/{}/{}'.format(day,month,year)
         due_date = '{}/{}/{}'.format(calendar.monthrange(int(year), int(month))[1],month,year)
         return [norm_date, due_date]
@@ -356,7 +360,7 @@ if 'gen_report' in tasks:
 
     paid_months = list()
     d_map = ['mes actual', 'mes anterior', 'hace dos meses', 'hace tres meses']
-    for y in range(2023,2025):
+    for y in range(dt.datetime.today().year-2,dt.datetime.today().year):
         for m in range(1,13):
             month = [str(y), str(m)]
             m_s = '-'.join(month)
@@ -392,8 +396,8 @@ if 'gen_report' in tasks:
     #Clientes perdidos
     ###############################################################
     due_alarm = [3, 2] #meses pendientes, meses pendientes diferido
-    start_month = ['2023', '9']
-    current_month = ['2024', '7']
+    start_month = [str(dt.datetime.today().year-1), str(dt.datetime.today().month)]
+    current_month = [str(dt.datetime.today().year), str(dt.datetime.today().month)]
     month_diff = month2num(current_month) - month2num(start_month) + 1
 
     def only_positive(x):
