@@ -10,9 +10,11 @@ import datetime as dt
 from unidecode import unidecode
 import nltk
 from xlrd import open_workbook
+import xlrd
 import openpyxl
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
+from openpyxl.cell.cell import Cell
 
 pd.set_option('max_colwidth', None)
 pd.set_option('display.max_rows', 500)
@@ -44,10 +46,23 @@ def gendf_from_excel_table(input_file, table_cols, stop_if_empty=True):
         rowl = []
         for col in col_range:
             if extension == ".xlsx":
-                value = wb.cell(row=row,column=col).value
+                cell = wb.cell(row=row, column=col)
+                if isinstance(cell, Cell):
+                    if cell.is_date:
+                        value = cell.value.strftime("%d/%m/%Y")
+                    else:
+                        value = cell.value
+                else:
+                    value = ""
             elif extension == ".xls":
-                #print("{}:{}".format(row,col))
-                value = sheet.cell(row,col).value
+                cell = sheet.cell(row, col)
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    date_value = xlrd.xldate.xldate_as_datetime(cell.value, wb.datemode)
+                    value = date_value.strftime("%d/%m/%Y")
+                else:
+                    value = cell.value
+
+
             if value == None:
                 value = np.nan
             try:
